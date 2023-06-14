@@ -6,13 +6,24 @@ package modelo.dao.book;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 import org.exist.xmldb.EXistResource;
+import org.w3c.dom.Attr;
+import org.w3c.dom.DOMImplementation;
+import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -40,6 +51,7 @@ public class BookEXistDao extends AbstractGenericDao<Book> implements IBookDao {
 
 	
 	private static final String AUTHOR_TAG = "author";
+	private static final String BOOK_TAG = "book";
 	private static final String TITLE_TAG = "title";
 	private static final String CATEGORY_ATT = "category";
 	private static final String ID_ATT = "id";
@@ -74,7 +86,48 @@ public class BookEXistDao extends AbstractGenericDao<Book> implements IBookDao {
 	@Override
 	public Book read(long id) throws InstanceNotFoundException {
 
-		return null;
+	
+		Book book = null;
+
+		try (Collection col = DatabaseManager.getCollection(dataSource.getUrl() + dataSource.getColeccion(),
+				dataSource.getUser(), dataSource.getPwd())) {
+
+			XQueryService xqs = (XQueryService) col.getService("XQueryService", "1.0");
+			xqs.setProperty("indent", "yes");
+
+			CompiledExpression compiled = xqs.compile("//book[@id=" + id + "]");
+			ResourceSet result = xqs.execute(compiled);
+
+			if (result.getSize() == 0)
+				throw new InstanceNotFoundException(id, Book.class.getName());
+
+			ResourceIterator i = result.getIterator();
+			Resource res = null;
+			while (i.hasMoreResources()) {
+				try {
+					res = i.nextResource();
+
+					System.out.println(res.getContent().toString());
+
+					book = stringNodeToBook(res.getContent().toString());
+
+				} finally {
+					// dont forget to cleanup resources
+					try {
+						((EXistResource) res).freeResources();
+					} catch (XMLDBException xe) {
+						book = null;
+						xe.printStackTrace();
+					}
+				}
+			}
+
+		} catch (XMLDBException e) {
+			book = null;
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return book;
 	}
 
 	private Book stringNodeToBook(String nodeString) {
@@ -117,6 +170,61 @@ public class BookEXistDao extends AbstractGenericDao<Book> implements IBookDao {
 
 		return texto;
 	}
+	
+	private String toXMLString(Book book) {
+		String output = "";
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		DocumentBuilder builder;
+		try {
+			builder = factory.newDocumentBuilder();
+
+			DOMImplementation implementation = builder.getDOMImplementation();
+
+			// Crea un document con un elemento raiz
+			Document document = implementation.createDocument(null, BOOK_TAG, null);
+			// Obtenemos el elemento raíz
+			Element bookRoot = document.getDocumentElement();
+		
+			Element title = createElement(document, TITLE_TAG, book.getTitle().trim());
+			Element author = createElement(document, AUTHOR_TAG, book.getAuthor().trim());
+
+			
+			bookRoot.appendChild(title);
+			bookRoot.appendChild(author);
+			bookRoot.setAttribute(ID_ATT, String.valueOf(book.getId()));
+			bookRoot.setAttribute(CATEGORY_ATT, book.getCategory());
+			
+				
+
+			TransformerFactory tf = TransformerFactory.newInstance();
+			Transformer transformer = tf.newTransformer();
+			transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+
+			// https://docs.oracle.com/javase/8/docs/api/java/io/StringWriter.html
+			StringWriter writer = new StringWriter();
+			transformer.transform(new DOMSource(document), new StreamResult(writer));
+			output = writer.getBuffer().toString().replaceAll("\n|\r", "");
+
+			System.out.println(output);
+
+		} catch (ParserConfigurationException e) {
+			output = "";
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (TransformerException e) {
+			output = "";
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return output;
+	}
+	private Element createElement(Document document, String tag, String content) {
+		Element elemento = document.createElement(tag);
+		elemento.setTextContent(content);
+		return elemento;
+	}
+
 
 	@Override
 	public boolean create(Book entity) {
@@ -132,8 +240,28 @@ public class BookEXistDao extends AbstractGenericDao<Book> implements IBookDao {
 
 	@Override
 	public boolean delete(Book entity) {
-		// TODO Auto-generated method stub
-		return false;
+		boolean exito = false;
+		try (Collection col = DatabaseManager.getCollection(dataSource.getUrl() + dataSource.getColeccion(),
+				dataSource.getUser(), dataSource.getPwd())) {
+
+			XQueryService xqs = (XQueryService) col.getService("XQueryService", "1.0");
+			
+
+			
+			CompiledExpression compiled = xqs
+					.compile("update delete  doc(\"bookstore.xml\")//book[@id="+entity.getId()+"]");
+			 xqs.execute(compiled);
+			 exito=true;
+		}
+		catch(XMLDBException e) {
+			e.printStackTrace();
+			
+			System.out.println("Ha ocurrido una exception: " + e.getMessage());
+			exito =false;
+		}
+
+		
+		return exito;
 	}
 
 	@Override

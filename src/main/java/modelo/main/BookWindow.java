@@ -19,8 +19,12 @@ import javax.swing.ListSelectionModel;
 import javax.swing.border.EmptyBorder;
 
 import modelo.Book;
+import modelo.dao.book.BookEXistDao;
+import modelo.exceptions.InstanceNotFoundException;
 import modelo.servicio.book.IServicioBook;
 import modelo.servicio.book.ServicioBook;
+import javax.swing.event.ListSelectionListener;
+import javax.swing.event.ListSelectionEvent;
 
 public class BookWindow extends JFrame {
 
@@ -35,7 +39,8 @@ public class BookWindow extends JFrame {
 	private JList<Book> JListBooks;
 
 	private IServicioBook bookServicio;
-	private JButton btnNewButton;
+	private JButton btnFindAllBooks;
+	private JButton btnEliminarLibro;
 
 	/**
 	 * Launch the application.
@@ -86,6 +91,23 @@ public class BookWindow extends JFrame {
 
 		JListBooks = new JList<Book>();
 
+		JListBooks.addListSelectionListener(new ListSelectionListener() {
+			public void valueChanged(ListSelectionEvent e) {
+
+				if (!e.getValueIsAdjusting()) {
+					int index = JListBooks.getSelectedIndex();
+					if (index != -1) {
+						if(index<JListBooks.getModel().getSize()) {
+						Book book = JListBooks.getModel().getElementAt(index);
+						addMensaje(true, "Se ha seleccionado el book: " + book);
+						}
+					}
+					btnEliminarLibro.setEnabled(index != -1);
+
+				}
+			}
+		});
+
 		JListBooks.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
 		JListBooks.setBounds(403, 37, 377, 200);
@@ -96,31 +118,45 @@ public class BookWindow extends JFrame {
 
 		panel.add(scrollPanel_in_JlistAllDepts);
 
-		btnNewButton = new JButton("Mostrar todos los libros");
-		btnNewButton.addActionListener(new ActionListener() {
+		btnFindAllBooks = new JButton("Mostrar todos los libros");
+		btnFindAllBooks.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				try {
-					addMensaje(true, "Buscando...");
-					List<Book> books = bookServicio.findAll();
-					DefaultListModel<Book> defModel = new DefaultListModel<>();
-					for (Book book : books) {
-						defModel.addElement(book);
-					}
-
-					
-					JListBooks.setModel(defModel);
-				} catch (Exception ex) {
-					ex.printStackTrace();
-					clearJListModel();
-
-					addMensaje(true, "Ha ocurrido un problema y no se han podido recuperar los libros");
-				}
-
+				getAllBooks();
 			}
 		});
-		btnNewButton.setFont(new Font("Tahoma", Font.PLAIN, 14));
-		btnNewButton.setBounds(0, 18, 284, 39);
-		panel.add(btnNewButton);
+		btnFindAllBooks.setFont(new Font("Tahoma", Font.PLAIN, 14));
+		btnFindAllBooks.setBounds(0, 18, 284, 39);
+		panel.add(btnFindAllBooks);
+
+		btnEliminarLibro = new JButton("Eliminar libro\r\n");
+		btnEliminarLibro.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				int index = JListBooks.getSelectedIndex();
+				if (index != -1) {
+					Book book = JListBooks.getModel().getElementAt(index);
+					addMensaje(true, "Implementa aquí el método delete: " + book);
+
+					try {
+						boolean exito = bookServicio.delete(book);
+						if (exito) {
+							addMensaje(true, "Se ha eliminado con éxito el book con id: " + book.getId());
+							getAllBooks();
+						} else {
+							addMensaje(true, "No se ha podido eliminar  el book con id:" + book.getId());
+						}
+					} catch (Exception ex) {
+						ex.printStackTrace();
+						addMensaje(true,
+								"No se ha podido eliminar  el book con id:" + book.getId() + "debido a una excepción");
+
+					}
+				}
+			}
+		});
+		btnEliminarLibro.setFont(new Font("Tahoma", Font.PLAIN, 14));
+		btnEliminarLibro.setBounds(0, 81, 284, 39);
+		btnEliminarLibro.setEnabled(false);
+		panel.add(btnEliminarLibro);
 
 	}
 
@@ -144,4 +180,31 @@ public class BookWindow extends JFrame {
 
 	}
 
+	private void getAllBooks() {
+		try {
+			addMensaje(true, "Buscando...");
+			List<Book> books = bookServicio.findAll();
+			DefaultListModel<Book> defModel = new DefaultListModel<>();
+			for (Book book : books) {
+				defModel.addElement(book);
+			}
+
+			JListBooks.setModel(defModel);
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			clearJListModel();
+
+			addMensaje(true, "Ha ocurrido un problema y no se han podido recuperar los libros");
+		}
+		
+		//Para probar de forma rápida que read funciona. En realidad, debería hacerse a través del servicio.
+//		BookEXistDao dao = new BookEXistDao();
+//		try {
+//			Book book =dao.read(1);
+//			System.out.println(book);
+//		} catch (InstanceNotFoundException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+	}
 }

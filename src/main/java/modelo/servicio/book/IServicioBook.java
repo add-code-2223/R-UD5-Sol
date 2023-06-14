@@ -10,6 +10,8 @@ public interface IServicioBook {
 
 	public List<Book> findAll();
 	
+	public boolean delete(Book book);
+	
 
 	
 }

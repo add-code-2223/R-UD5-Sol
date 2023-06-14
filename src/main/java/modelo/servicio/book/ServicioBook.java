@@ -19,6 +19,11 @@ public class ServicioBook implements IServicioBook {
 		return bookDao.findAll();
 	}
 
+	@Override
+	public boolean delete(Book book) {	
+		return bookDao.delete(book);
+	}
+
 	
 
 
